@@ -1,37 +1,40 @@
 import os
-from telethon import TelegramClient, events
 import asyncio
+from datetime import datetime
+import pytz
+from telethon import TelegramClient, events
 
-# Получаем данные из переменных окружения
 api_id = int(os.environ.get("API_ID"))
 api_hash = os.environ.get("API_HASH")
-bot_token = os.environ.get("BOT_TOKEN")  # Получаем токен бота
+bot_token = os.environ.get("BOT_TOKEN")
 
-# Каналы для получения новостей
 source_channels = ["@vedexx_news", "@customs_rf", "@OVEDinfo"]
+target_channel = "@clr_group_expert"  # замени на свой
 
-# Целевой канал для пересылки новостей
-target_channel = "@clr_group_expert"  # Замените на свой канал
+client = TelegramClient('session_name', api_id, api_hash)
 
-# Создаем клиента с использованием токена бота
-client = TelegramClient('session_name', api_id, api_hash).start(bot_token=bot_token)
+# Московская зона
+moscow_tz = pytz.timezone("Europe/Moscow")
 
-# Подписываемся на каналы и пересылаем сообщения
 @client.on(events.NewMessage(chats=source_channels))
 async def handler(event):
-    try:
-        # Пересылаем сообщение в целевой канал
-        await client.forward_messages(target_channel, event.message)
-        print(f"Новость из {event.chat.username} переслана")
-    except Exception as e:
-        print(f"Ошибка: {e}")
+    now_moscow = datetime.now(moscow_tz)
+    hour = now_moscow.hour
 
-# Основная асинхронная функция
+    # Проверяем время
+    if 9 <= hour < 21:
+        try:
+            await client.forward_messages(target_channel, event.message)
+            print(f"Опубликовано в {hour}:{now_moscow.minute}")
+        except Exception as e:
+            print(f"Ошибка: {e}")
+    else:
+        print(f"Новость пропущена (время {hour}:{now_moscow.minute})")
+
 async def main():
+    await client.start(bot_token=bot_token)
     print("Бот запущен...")
-    await client.run_until_disconnected()  # Ожидаем сообщений
+    await client.run_until_disconnected()
 
-# Запуск основного кода через уже существующий цикл событий
-if __name__ == '__main__':
-    loop = asyncio.get_event_loop()  # Получаем текущий цикл событий
-    loop.run_until_complete(main())  # Запускаем main() в этом цикле
+if __name__ == "__main__":
+    asyncio.run(main())
