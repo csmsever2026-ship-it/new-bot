@@ -1,5 +1,6 @@
 import os
 from telethon import TelegramClient, events
+import asyncio
 
 # Получаем данные из переменных окружения
 api_id = int(os.environ.get("API_ID"))
@@ -25,6 +26,11 @@ async def handler(event):
     except Exception as e:
         print(f"Ошибка: {e}")
 
-# Запуск клиента
-print("Бот запущен...")
-await client.run_until_disconnected()
+# Основная асинхронная функция
+async def main():
+    print("Бот запущен...")
+    await client.run_until_disconnected()  # Ожидаем сообщений
+
+# Запуск основной функции
+if __name__ == '__main__':
+    asyncio.run(main())  # Запускаем основную асинхронную функцию
