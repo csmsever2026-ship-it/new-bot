@@ -11,7 +11,7 @@ bot_token = os.environ.get("BOT_TOKEN")  # Получаем токен бота
 source_channels = ["@vedexx_news", "@customs_rf", "@OVEDinfo"]
 
 # Целевой канал для пересылки новостей
-target_channel = "clr_group_expert"  # Замените на свой канал
+target_channel = "@clr_group_expert"  # Замените на свой канал
 
 # Создаем клиента с использованием токена бота
 client = TelegramClient('session_name', api_id, api_hash).start(bot_token=bot_token)
@@ -31,6 +31,7 @@ async def main():
     print("Бот запущен...")
     await client.run_until_disconnected()  # Ожидаем сообщений
 
-# Запуск основной функции
+# Запуск основного кода через уже существующий цикл событий
 if __name__ == '__main__':
-    asyncio.run(main())  # Запускаем основную асинхронную функцию
+    loop = asyncio.get_event_loop()  # Получаем текущий цикл событий
+    loop.run_until_complete(main())  # Запускаем main() в этом цикле
