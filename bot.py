@@ -1,44 +1,38 @@
-from telethon import TelegramClient, events
 import os
+from telethon import TelegramClient, events
 
-# Получаем api_id и api_hash из переменных окружения
+# Получаем данные из переменных окружения
 api_id = int(os.environ.get("API_ID"))
 api_hash = os.environ.get("API_HASH")
+phone_number = os.environ.get("PHONE_NUMBER")  # Получаем номер телефона
 
-# Создаем клиент Telethon
+# Каналы для получения новостей
+source_channels = ["@vedexx_news", "@customs_rf", "@OVEDinfo"]
+
+# Целевой канал для пересылки новостей
+target_channel = "clr_group_expert"  # Замените на свой канал
+
+# Создаем клиента
 client = TelegramClient('session_name', api_id, api_hash)
 
-# Подписываемся на каналы
-async def join_channels():
-    # Перечисляем каналы для подписки
-    channels_to_join = [
-        "vedexx_news", 
-        "customs_rf", 
-        "OVEDinfo"
-    ]
-    
-    for channel in channels_to_join:
-        # Подписываемся на канал
-        await client(JoinChannel(channel))
-        print(f"Подписались на канал: {channel}")
+# Функция для авторизации
+async def start_client():
+    if phone_number:  # Если используется номер телефона
+        await client.start(phone_number)
+    else:
+        await client.start()  # Если используется Bot API (например, через токен)
 
-# Функция для получения новостей и пересылки в целевой канал
-@client.on(events.NewMessage)
+# Подписываемся на каналы и пересылаем сообщения
+@client.on(events.NewMessage(chats=source_channels))
 async def handler(event):
-    # Проверяем, откуда пришло сообщение (по username канала)
-    if event.chat.username in ["vedexx_news", "customs_rf", "OVEDinfo"]:
-        message = event.message.text
-        target_channel = "clr_group_expert"  # Замените на свой канал
-        await client.send_message(target_channel, message)
-        print(f"Пересылаем сообщение в {target_channel}")
+    try:
+        # Пересылаем сообщение в целевой канал
+        await client.forward_messages(target_channel, event.message)
+        print(f"Новость из {event.chat.username} переслана")
+    except Exception as e:
+        print(f"Ошибка: {e}")
 
-# Запуск подписки и клиента
-async def main():
-    await client.start()
-    await join_channels()
-    print("Подписались на каналы и готовы получать новости!")
-    await client.run_until_disconnected()
-
-if __name__ == '__main__':
-    import asyncio
-    asyncio.run(main())
+# Запуск клиента
+print("Бот запущен...")
+client.start()
+client.run_until_disconnected()
