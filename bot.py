@@ -4,26 +4,16 @@ from telethon import TelegramClient, events
 # Получаем данные из переменных окружения
 api_id = int(os.environ.get("API_ID"))
 api_hash = os.environ.get("API_HASH")
-phone_number = os.environ.get("PHONE_NUMBER")  # Получаем номер телефона
-bot_token = os.environ.get("BOT_TOKEN")  # Токен бота, если используем Bot API
+bot_token = os.environ.get("BOT_TOKEN")  # Получаем токен бота
 
 # Каналы для получения новостей
-source_channels = ["vedexx_news", "customs_rf", "OVEDinfo"]
+source_channels = ["@vedexx_news", "@customs_rf", "@OVEDinfo"]
 
 # Целевой канал для пересылки новостей
 target_channel = "clr_group_expert"  # Замените на свой канал
 
-# Создаем клиента
-client = TelegramClient('session_name', api_id, api_hash)
-
-# Функция для авторизации
-async def start_client():
-    if phone_number:  # Если используется номер телефона
-        await client.start(phone_number)
-    elif bot_token:  # Если используется Bot API
-        await client.start(bot_token=bot_token)
-    else:
-        raise ValueError("Не указан номер телефона или токен бота!")
+# Создаем клиента с использованием токена бота
+client = TelegramClient('session_name', api_id, api_hash).start(bot_token=bot_token)
 
 # Подписываемся на каналы и пересылаем сообщения
 @client.on(events.NewMessage(chats=source_channels))
@@ -35,13 +25,6 @@ async def handler(event):
     except Exception as e:
         print(f"Ошибка: {e}")
 
-# Основная асинхронная функция
-async def main():
-    print("Бот запущен...")
-    await start_client()  # Вызов start_client внутри main
-    await client.run_until_disconnected()  # Ожидаем сообщений
-
-# Запуск основной функции
-if __name__ == '__main__':
-    import asyncio
-    asyncio.run(main())
+# Запуск клиента
+print("Бот запущен...")
+await client.run_until_disconnected()
