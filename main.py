@@ -11,7 +11,11 @@ api_hash = os.getenv('API_HASH')
 
 # Список источников — @username через запятую
 sources_str = os.getenv('@vedexx_news,@customs_rf,@oVEDinfo')          # например: "@kanal1,@kanal2,@kanal3"
-sources_list = [s.strip() for s in sources_str.split(',') if s.strip()]
+sources_list = [s.strip() for s in sources_str.split(',') if s.strip()]sources_str = os.getenv('SOURCES')
+if sources_str is None:
+    print("ОШИБКА: переменная SOURCES не задана в Railway Variables!")
+    exit(1)  # или просто continue, но лучше выйти
+sources_list = [s.strip() for s in sources_str.split(',') if s.strip()]  # ← здесь был ';', но лучше ',' для @username
 
 # Твой канал (куда пересылать)
 target_str = os.getenv('@CLR_Group_manager')            # например: "@moy_kanal"
@@ -55,4 +59,5 @@ async def main():
     await client.run_until_disconnected()
 
 # Запускаем
+
 asyncio.run(main())
