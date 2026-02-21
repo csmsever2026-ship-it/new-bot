@@ -4,6 +4,7 @@
 
 import os
 import asyncio
+import threading
 from telethon import TelegramClient, events
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
@@ -14,7 +15,7 @@ import uvicorn
 load_dotenv()
 
 # ────────────────────────────────────────────────
-# Переменные из Railway → Variables
+# Переменные из Railway → Variables (обязательно!)
 # ────────────────────────────────────────────────
 api_id      = os.getenv("API_ID")      # 33887345
 api_hash    = os.getenv("API_HASH")    # 27278fe9e005b6a7c4f77c42bef3ea08
@@ -23,7 +24,7 @@ target_str  = os.getenv("TARGET")      # @clr_group_expert
 
 # Проверки
 if not api_id or not api_hash:
-    print("ОШИБКА: API_ID или API_HASH не заданы")
+    print("ОШИБКА: API_ID или API_HASH не заданы в Variables")
     exit(1)
 
 if not sources_str or not target_str:
@@ -38,16 +39,19 @@ except ValueError:
 
 sources_list = [s.strip() for s in sources_str.split(",") if s.strip()]
 
-# Клиент в user-режиме (сессия user_session.session должна быть в репозитории)
+# Клиент в user-режиме (файл user_session.session должен быть в репозитории)
 client = TelegramClient("user_session", api_id, api_hash)
 
-# Проверка времени 09:00–21:00 МСК
+# Проверка времени 09:00–21:00 МСК (UTC+3)
 def is_working_time():
     msk_tz = timezone(timedelta(hours=3))
     now_msk = datetime.now(msk_tz)
     hour = now_msk.hour
     return 9 <= hour < 21
 
+# ────────────────────────────────────────────────
+# Основная функция бота
+# ────────────────────────────────────────────────
 async def bot_main():
     print("Подключаемся к Telegram в user-режиме...")
     await client.start()
@@ -71,6 +75,7 @@ async def bot_main():
         print(f"Ошибка с целевым каналом {target_str}: {e}")
         return
 
+    # Обработчик новых сообщений (с отладкой)
     @client.on(events.NewMessage(chats=sources_entities))
     async def handler(event):
         chat_name = event.chat.title or event.chat.username or "?"
@@ -88,7 +93,7 @@ async def bot_main():
 
         try:
             msg = event.message
-            msg.clear_forward()
+            msg.clear_forward()  # убираем "Переслано из"
             await client.forward_messages(target, msg)
             print(f"[SUCCESS] Переслано из {chat_name} в {datetime.now(msk_tz).strftime('%H:%M:%S МСК')}")
         except Exception as e:
@@ -103,7 +108,7 @@ async def bot_main():
     await client.run_until_disconnected()
 
 # ────────────────────────────────────────────────
-# Веб-сервер для Railway (чтобы не убивал контейнер)
+# Веб-сервер (чтобы Railway держал контейнер живым)
 # ────────────────────────────────────────────────
 app = FastAPI(title="Telegram Forward Bot")
 
@@ -112,24 +117,20 @@ def root():
     return {"status": "bot is running", "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S МСК")}
 
 @app.get("/health")
-def health():
+def health_check():
     return {"status": "healthy"}
 
 # ────────────────────────────────────────────────
-# Запуск всего в одном asyncio-цикле
+# Запуск: бот в фоне + веб-сервер в главном потоке
 # ────────────────────────────────────────────────
-async def combined_main():
-    # Запускаем Telegram-бота
-    bot_task = asyncio.create_task(bot_main())
-
-    # Запускаем веб-сервер
-    config = uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="info")
-    server = uvicorn.Server(config)
-    web_task = asyncio.create_task(server.serve())
-
-    # Ждём оба
-    await asyncio.gather(bot_task, web_task)
+def run_bot():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(bot_main())
 
 if __name__ == "__main__":
-    print("Стартуем бот + веб-сервер...")
-    asyncio.run(combined_main())
+    print("Запускаем Telegram-бота в фоновом потоке...")
+    threading.Thread(target=run_bot, daemon=True).start()
+
+    print("Запускаем веб-сервер на порту 8080 для Railway...")
+    uvicorn.run(app, host="0.0.0.0", port=8080, log_level="info")
