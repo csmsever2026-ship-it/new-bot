@@ -4,37 +4,28 @@
 
 import os
 import asyncio
+import threading
 from telethon import TelegramClient, events
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
+from fastapi import FastAPI
+import uvicorn
 
 # Загружаем переменные окружения из Railway
 load_dotenv()
 
 # ────────────────────────────────────────────────
-#   Переменные из Railway → Variables
+# Переменные из Railway → Variables
 # ────────────────────────────────────────────────
-# API_ID      → 33887345
-# API_HASH    → 27278fe9e005b6a7c4f77c42bef3ea08
-# BOT_TOKEN   → 8332360026:AAENXiUqg515om9pTqLfqu1sDA4VScrWh_g
-# SOURCES     → @vedexx_news,@customs_rf,@oVEDinfo
-# TARGET      → @clr_group_expert
-# ────────────────────────────────────────────────
-
-api_id     = os.getenv("API_ID")
-api_hash   = os.getenv("API_HASH")
-bot_token  = os.getenv("BOT_TOKEN")
-sources_str = os.getenv("SOURCES")
-target_str  = os.getenv("TARGET")
+api_id      = os.getenv("API_ID")     # 33887345
+api_hash    = os.getenv("API_HASH")   # 27278fe9e005b6a7c4f77c42bef3ea08
+sources_str = os.getenv("SOURCES")    # @vedexx_news,@customs_rf,@oVEDinfo
+target_str  = os.getenv("TARGET")     # @clr_group_expert
 
 # Проверки обязательных переменных
 if not api_id or not api_hash:
     print("ОШИБКА: API_ID или API_HASH не заданы")
     exit(1)
-
-if not bot_token:
-    print("ОШИБКА: BOT_TOKEN не задан — рекомендуется использовать бота")
-    # exit(1)  # можно закомментировать, если хочешь user-режим
 
 if not sources_str or not target_str:
     print("ОШИБКА: SOURCES или TARGET не заданы")
@@ -48,27 +39,21 @@ except ValueError:
 
 sources_list = [s.strip() for s in sources_str.split(",") if s.strip()]
 
-# Создаём клиента (бот-режим)
-print("Запускаемся в режиме БОТА")
-client = TelegramClient("bot_session", api_id, api_hash)
+# Клиент в user-режиме (сессия user_session.session уже в репозитории)
+client = TelegramClient("user_session", api_id, api_hash)
 
-# Функция проверки времени (09:00–21:00 MSK)
+# Проверка времени 09:00–21:00 MSK
 def is_working_time():
-    # Текущее время в Москве (UTC+3)
     msk_tz = timezone(timedelta(hours=3))
     now_msk = datetime.now(msk_tz)
     hour = now_msk.hour
-    
-    # 9:00 включительно — 21:00 не включительно (до 20:59:59)
     return 9 <= hour < 21
 
-async def main():
-    await client.start(bot_token=bot_token)
-    print("Бот авторизован")
+async def bot_main():
+    print("Подключаемся к Telegram в user-режиме...")
+    await client.start()
 
     print("\nЗагружаем каналы...")
-
-    # Источники
     sources_entities = []
     for src in sources_list:
         try:
@@ -79,7 +64,6 @@ async def main():
         except Exception as e:
             print(f"Ошибка с {src}: {e}")
 
-    # Целевой канал
     try:
         target = await client.get_entity(target_str)
         title = target.title or target.username or target_str
@@ -88,32 +72,47 @@ async def main():
         print(f"Ошибка с целью {target_str}: {e}")
         return
 
-    # Обработчик новых сообщений
     @client.on(events.NewMessage(chats=sources_entities))
     async def handler(event):
+        chat_name = event.chat.title or event.chat.username or "?"
+        msg_time = event.date.strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[DEBUG] Получено сообщение из {chat_name} в {msg_time}")
+        print(f"[DEBUG] Текст: {event.message.text[:100]}..." if event.message.text else "[DEBUG] Без текста (медиа)")
+
         if not is_working_time():
-            chat_name = event.chat.title or event.chat.username or "?"
-            print(f"Вне рабочего времени (09–21 MSK) — пропущено сообщение из {chat_name}")
+            print(f"Вне времени 09–21 МСК — пропущено из {chat_name}")
             return
 
         try:
             msg = event.message
             msg.clear_forward()  # убираем "Переслано из…"
-            
             await client.forward_messages(target, msg)
-            
-            chat_name = event.chat.title or event.chat.username or "?"
-            print(f"[OK] Переслано из {chat_name} в {datetime.now(timezone(timedelta(hours=3))).strftime('%H:%M:%S MSK')}")
+            print(f"[OK] Переслано из {chat_name} в {datetime.now(timezone(timedelta(hours=3))).strftime('%H:%M:%S МСК')}")
         except Exception as e:
-            print(f"Ошибка пересылки: {e}")
+            print(f"[ERROR] При пересылке: {e}")
 
     print("\n" + "═" * 60)
-    print("БОТ ЗАПУЩЕН")
-    print("Пересылка работает только с 09:00 до 21:00 по Москве")
-    print("Жду новых сообщений в источниках...")
+    print("БОТ ЗАПУЩЕН В USER-РЕЖИМЕ")
+    print("Пересылка только с 09:00 до 21:00 по Москве")
+    print("Жду новых сообщений...")
     print("═" * 60 + "\n")
 
     await client.run_until_disconnected()
 
+# Фейковый веб-сервер, чтобы Railway не убивал контейнер
+app = FastAPI()
+
+@app.get("/")
+def read_root():
+    return {"status": "bot is running", "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+# Запуск бота в отдельном потоке + веб-сервер
 if __name__ == "__main__":
-    asyncio.run(main())
+    def run_bot():
+        asyncio.run(bot_main())
+
+    threading.Thread(target=run_bot, daemon=True).start()
+
+    # Запускаем веб-сервер на порту 8000
+    print("Запускаем веб-сервер на порту 8000 для Railway...")
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
