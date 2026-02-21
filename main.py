@@ -4,12 +4,9 @@
 
 import os
 import asyncio
-import threading
 from telethon import TelegramClient, events
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
-from fastapi import FastAPI
-import uvicorn
 
 load_dotenv()
 
@@ -40,13 +37,8 @@ def is_working_time():
     return 9 <= now_msk.hour < 21
 
 async def bot_main():
-    print("Начало подключения к Telegram...")
-    try:
-        await client.start()
-        print("Успешно подключены к Telegram в user-режиме!")
-    except Exception as e:
-        print(f"Ошибка подключения к Telegram: {e}")
-        return
+    print("Подключаемся к Telegram в user-режиме...")
+    await client.start()
 
     print("\nЗагружаем каналы...")
     sources_entities = []
@@ -54,13 +46,13 @@ async def bot_main():
         try:
             entity = await client.get_entity(src)
             sources_entities.append(entity)
-            print(f"Успешно: {src} → {entity.title or entity.username or src}")
+            print(f"Успешно подключён источник: {src} → {entity.title or entity.username or src}")
         except Exception as e:
             print(f"Ошибка с {src}: {e}")
 
     try:
         target = await client.get_entity(target_str)
-        print(f"Цель: {target_str} → {target.title or target.username or target_str}")
+        print(f"Целевой канал: {target_str} → {target.title or target.username or target_str}")
     except Exception as e:
         print(f"Ошибка с целью {target_str}: {e}")
         return
@@ -69,11 +61,12 @@ async def bot_main():
     async def handler(event):
         chat_name = event.chat.title or event.chat.username or "?"
         msg_time = event.date.strftime('%Y-%m-%d %H:%M:%S МСК')
-        text = event.message.text[:120] if event.message.text else "[медиа]"
+        text_preview = event.message.text[:120] if event.message.text else "[медиа или без текста]"
 
-        print(f"[EVENT] Новое сообщение из {chat_name} в {msg_time}")
-        print(f"[EVENT] Текст: {text}")
-        print(f"[EVENT] ID: {event.message.id}")
+        print(f"[EVENT] Получено сообщение из {chat_name} в {msg_time}")
+        print(f"[EVENT] Текст: {text_preview}")
+        print(f"[EVENT] ID сообщения: {event.message.id}")
+        print(f"[EVENT] Текущее время МСК: {datetime.now(msk_tz).strftime('%H:%M:%S')}")
 
         if not is_working_time():
             print("Пропущено — вне 09:00–21:00 МСК")
@@ -85,35 +78,26 @@ async def bot_main():
             await client.forward_messages(target, msg)
             print(f"[SUCCESS] Переслано из {chat_name} в {datetime.now(msk_tz).strftime('%H:%M:%S МСК')}")
         except Exception as e:
-            print(f"[ERROR] Пересылка не удалась: {e}")
+            print(f"[ERROR] Ошибка при пересылке: {e}")
 
     print("\n" + "═" * 70)
     print("БОТ ПОЛНОСТЬЮ ЗАПУЩЕН")
-    print("Пересылка только с 09:00 до 21:00 МСК")
-    print("Жду новых постов...")
+    print("Пересылка работает только с 09:00 до 21:00 по Москве")
+    print("Жду новых сообщений...")
     print("═" * 70 + "\n")
 
-    await client.run_until_disconnected()
-
-# Веб-сервер для Railway
-app = FastAPI()
-
-@app.get("/")
-def root():
-    return {"status": "bot running", "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S МСК")}
-
-@app.get("/health")
-def health():
-    return {"status": "healthy"}
-
-# Запуск
-async def start_all():
-    bot_task = asyncio.create_task(bot_main())
-    config = uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="info")
-    server = uvicorn.Server(config)
-    web_task = asyncio.create_task(server.serve())
-    await asyncio.gather(bot_task, web_task)
+    # Бесконечный цикл, чтобы Railway не убивал процесс
+    while True:
+        try:
+            # Пинг каналов каждые 5 минут (чтобы Telegram начал слать события)
+            for src in sources_entities:
+                await client.get_messages(src, limit=1)
+                print(f"[PING] Проверен канал {src.username or src.title or src.id}")
+            await asyncio.sleep(300)  # 5 минут
+        except Exception as e:
+            print(f"[PING ERROR] {e}")
+            await asyncio.sleep(60)  # ждём минуту при ошибке
 
 if __name__ == "__main__":
-    print("Стартуем всё...")
-    asyncio.run(start_all())
+    print("Стартуем Telegram-бота...")
+    asyncio.run(bot_main())
