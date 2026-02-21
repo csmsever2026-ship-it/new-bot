@@ -107,12 +107,23 @@ def read_root():
     return {"status": "bot is running", "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
 # Запуск бота в отдельном потоке + веб-сервер
+# Фейковый веб-сервер + healthcheck для Railway
+app = FastAPI()
+
+@app.get("/")
+def read_root():
+    return {"status": "bot alive", "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
 if __name__ == "__main__":
     def run_bot():
         asyncio.run(bot_main())
 
     threading.Thread(target=run_bot, daemon=True).start()
 
-    # Запускаем веб-сервер на порту 8000
-    print("Запускаем веб-сервер на порту 8000 для Railway...")
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+    print("Запускаем веб-сервер + healthcheck на порту 8080...")
+    uvicorn.run(app, host="0.0.0.0", port=8080, log_level="info")
+
