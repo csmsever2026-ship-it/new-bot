@@ -14,7 +14,7 @@ import uvicorn
 load_dotenv()
 
 # ────────────────────────────────────────────────
-# Переменные из Railway → Variables (обязательно!)
+# Переменные из Railway → Variables
 # ────────────────────────────────────────────────
 api_id      = os.getenv("API_ID")      # 33887345
 api_hash    = os.getenv("API_HASH")    # 27278fe9e005b6a7c4f77c42bef3ea08
@@ -23,7 +23,7 @@ target_str  = os.getenv("TARGET")      # @clr_group_expert
 
 # Проверки
 if not api_id or not api_hash:
-    print("ОШИБКА: API_ID или API_HASH не заданы в Variables")
+    print("ОШИБКА: API_ID или API_HASH не заданы")
     exit(1)
 
 if not sources_str or not target_str:
@@ -71,9 +71,6 @@ async def bot_main():
         print(f"Ошибка с целевым каналом {target_str}: {e}")
         return
 
-    # ────────────────────────────────────────────────
-    # Обработчик новых сообщений (handler) с максимальной отладкой
-    # ────────────────────────────────────────────────
     @client.on(events.NewMessage(chats=sources_entities))
     async def handler(event):
         chat_name = event.chat.title or event.chat.username or "?"
@@ -91,7 +88,7 @@ async def bot_main():
 
         try:
             msg = event.message
-            msg.clear_forward()  # убираем надпись "Переслано из"
+            msg.clear_forward()
             await client.forward_messages(target, msg)
             print(f"[SUCCESS] Переслано из {chat_name} в {datetime.now(msk_tz).strftime('%H:%M:%S МСК')}")
         except Exception as e:
@@ -106,23 +103,23 @@ async def bot_main():
     await client.run_until_disconnected()
 
 # ────────────────────────────────────────────────
-# Фейковый веб-сервер (FastAPI + uvicorn) — чтобы Railway не убивал контейнер
+# Веб-сервер для Railway (чтобы не убивал контейнер)
 # ────────────────────────────────────────────────
-app = FastAPI(title="Telegram Forward Bot", version="1.0")
+app = FastAPI(title="Telegram Forward Bot")
 
 @app.get("/")
 def root():
     return {"status": "bot is running", "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S МСК")}
 
 @app.get("/health")
-def health_check():
-    return {"status": "healthy", "uptime": "alive"}
+def health():
+    return {"status": "healthy"}
 
 # ────────────────────────────────────────────────
-# Запуск бота и веб-сервера в одном asyncio-цикле
+# Запуск всего в одном asyncio-цикле
 # ────────────────────────────────────────────────
 async def combined_main():
-    # Запускаем Telegram-бота как задачу
+    # Запускаем Telegram-бота
     bot_task = asyncio.create_task(bot_main())
 
     # Запускаем веб-сервер
@@ -130,9 +127,9 @@ async def combined_main():
     server = uvicorn.Server(config)
     web_task = asyncio.create_task(server.serve())
 
-    # Ждём, пока оба работают
+    # Ждём оба
     await asyncio.gather(bot_task, web_task)
 
 if __name__ == "__main__":
-    print("Стартуем бот + веб-сервер в одном цикле...")
+    print("Стартуем бот + веб-сервер...")
     asyncio.run(combined_main())
