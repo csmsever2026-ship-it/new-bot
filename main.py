@@ -1,10 +1,9 @@
 # Этот файл запускается на Railway и пересылает новые посты
 # из каналов @vedexx_news, @customs_rf, @oVEDinfo в @clr_group_expert
-# Только в рабочее время: 09:00 – 20:59 по Москве (MSK, UTC+3)
+# Только в рабочее время: 09:00 – 21:00 по Москве (MSK, UTC+3)
 
 import os
 import asyncio
-import threading
 from telethon import TelegramClient, events
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
@@ -42,12 +41,12 @@ sources_list = [s.strip() for s in sources_str.split(",") if s.strip()]
 # Клиент в user-режиме (сессия user_session.session должна быть в репозитории)
 client = TelegramClient("user_session", api_id, api_hash)
 
-# Проверка времени 09:00–20:59 МСК (UTC+3)
+# Проверка времени 09:00–21:00 МСК (UTC+3)
 def is_working_time():
     msk_tz = timezone(timedelta(hours=3))
     now_msk = datetime.now(msk_tz)
     hour = now_msk.hour
-    return 9 <= hour <= 20
+    return 9 <= hour < 21
 
 async def bot_main():
     print("Подключаемся к Telegram в user-режиме...")
@@ -87,7 +86,7 @@ async def bot_main():
         print(f"[EVENT] Текущее время МСК: {datetime.now(msk_tz).strftime('%H:%M:%S')}")
 
         if not is_working_time():
-            print("Пропущено — вне рабочего времени 09:00–20:59 МСК")
+            print("Пропущено — вне рабочего времени 09:00–21:00 МСК")
             return
 
         try:
@@ -100,8 +99,8 @@ async def bot_main():
 
     print("\n" + "═" * 70)
     print("БОТ ЗАПУЩЕН В USER-РЕЖИМЕ")
-    print("Пересылка работает только с 09:00 до 20:59 по Москве")
-    print("Жду новых сообщений в источниках...")
+    print("Пересылка работает только с 09:00 до 21:00 по Москве")
+    print("Жду новых сообщений...")
     print("═" * 70 + "\n")
 
     await client.run_until_disconnected()
@@ -119,12 +118,9 @@ def root():
 def health_check():
     return {"status": "healthy", "uptime": "alive"}
 
-# Запуск бота в отдельном потоке + веб-сервер
-if __name__ == "__main__":
-    def run_bot():
-        asyncio.run(bot_main())
-
-    threading.Thread(target=run_bot, daemon=True).start()
-
-    print("Запускаем веб-сервер + healthcheck на порту 8080 для Railway...")
-    uvicorn.run(app, host="0.0.0.0", port=8080, log_level="info")
+# ────────────────────────────────────────────────
+# Запуск бота и веб-сервера в одном asyncio-цикле
+# ────────────────────────────────────────────────
+async def combined_main():
+    # Запускаем Telegram-бота как задачу
+    bot_task = asyncio.create_task(bot_main
