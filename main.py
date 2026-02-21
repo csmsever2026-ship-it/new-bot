@@ -41,7 +41,7 @@ sources_list = [s.strip() for s in sources_str.split(",") if s.strip()]
 # Клиент в user-режиме (сессия user_session.session должна быть в репозитории)
 client = TelegramClient("user_session", api_id, api_hash)
 
-# Проверка времени 09:00–21:00 МСК (UTC+3)
+# Проверка времени 09:00–21:00 МСК
 def is_working_time():
     msk_tz = timezone(timedelta(hours=3))
     now_msk = datetime.now(msk_tz)
@@ -123,4 +123,16 @@ def health_check():
 # ────────────────────────────────────────────────
 async def combined_main():
     # Запускаем Telegram-бота как задачу
-    bot_task = asyncio.create_task(bot_main
+    bot_task = asyncio.create_task(bot_main())
+
+    # Запускаем веб-сервер
+    config = uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="info")
+    server = uvicorn.Server(config)
+    web_task = asyncio.create_task(server.serve())
+
+    # Ждём, пока оба работают
+    await asyncio.gather(bot_task, web_task)
+
+if __name__ == "__main__":
+    print("Стартуем бот + веб-сервер в одном цикле...")
+    asyncio.run(combined_main())
