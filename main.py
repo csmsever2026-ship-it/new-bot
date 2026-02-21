@@ -1,4 +1,9 @@
-# Этот файл запускается на Railway и пересылает новые посты
+sources_str = os.getenv('SOURCES')
+if sources_str is None:
+    print("ОШИБКА: переменная SOURCES не задана в Railway Variables!")
+    exit(1)
+
+sources_list = [s.strip() for s in sources_str.split(',') if s.strip()]  # используем ',' вместо ';'# Этот файл запускается на Railway и пересылает новые посты
 # из каналов @vedexx_news, @customs_rf, @oVEDinfo в @clr_group_expert
 # Только в рабочее время: 09:00 – 20:59 по Москве (MSK, UTC+3)
 
@@ -128,3 +133,4 @@ if __name__ == "__main__":
 
     print("Запускаем веб-сервер + healthcheck на порту 8080 для Railway...")
     uvicorn.run(app, host="0.0.0.0", port=8080, log_level="info")
+
