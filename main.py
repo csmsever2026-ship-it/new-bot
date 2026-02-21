@@ -75,7 +75,7 @@ async def bot_main():
         print(f"Ошибка с целевым каналом {target_str}: {e}")
         return
 
-    # Обработчик новых сообщений (с отладкой)
+    # Обработчик новых сообщений (с максимальной отладкой)
     @client.on(events.NewMessage(chats=sources_entities))
     async def handler(event):
         chat_name = event.chat.title or event.chat.username or "?"
@@ -108,7 +108,7 @@ async def bot_main():
     await client.run_until_disconnected()
 
 # ────────────────────────────────────────────────
-# Веб-сервер (чтобы Railway держал контейнер живым)
+# Веб-сервер для Railway (чтобы не убивал контейнер)
 # ────────────────────────────────────────────────
 app = FastAPI(title="Telegram Forward Bot")
 
