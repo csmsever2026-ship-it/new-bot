@@ -8,20 +8,15 @@ from telethon import TelegramClient, events
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 
-# Загружаем переменные окружения из Railway
 load_dotenv()
 
-# ────────────────────────────────────────────────
-# Переменные из Railway → Variables
-# ────────────────────────────────────────────────
-api_id      = os.getenv("API_ID")      # 33887345
-api_hash    = os.getenv("API_HASH")    # 27278fe9e005b6a7c4f77c42bef3ea08
-sources_str = os.getenv("SOURCES")     # @vedexx_news,@customs_rf,@oVEDinfo
-target_str  = os.getenv("TARGET")      # @clr_group_expert
+api_id      = os.getenv("API_ID")
+api_hash    = os.getenv("API_HASH")
+sources_str = os.getenv("SOURCES")
+target_str  = os.getenv("TARGET")
 
-# Проверки
 if not api_id or not api_hash:
-    print("ОШИБКА: API_ID или API_HASH не заданы в Variables")
+    print("ОШИБКА: API_ID или API_HASH не заданы")
     exit(1)
 
 if not sources_str or not target_str:
@@ -33,7 +28,6 @@ sources_list = [s.strip() for s in sources_str.split(",") if s.strip()]
 
 client = TelegramClient("user_session", api_id, api_hash)
 
-# Проверка времени 09:00–21:00 МСК
 def is_working_time():
     now_msk = datetime.now(timezone(timedelta(hours=3)))
     hour = now_msk.hour
@@ -62,7 +56,6 @@ async def main():
         print(f"Ошибка с целью {target_str}: {e}")
         return
 
-    # Обработчик сообщений — пересылаем весь пост целиком
     @client.on(events.NewMessage(chats=sources_entities))
     async def handler(event):
         chat_name = event.chat.title or event.chat.username or "?"
@@ -81,25 +74,13 @@ async def main():
         try:
             msg = event.message
 
-            # Если есть текст и медиа — отправляем текст + медиа
-            if msg.media and msg.message:
-                await client.send_message(
-                    target,
-                    msg.message,           # текст поста
-                    file=msg.media,        # картинка/видео/медиа
-                    link_preview=False
-                )
-                print(f"[SUCCESS] Переслан пост с текстом и медиа из {chat_name} в {datetime.now(timezone(timedelta(hours=3))).strftime('%H:%M:%S МСК')}")
+            # Безопасно убираем "Переслано из...", только если сообщение forwarded
+            if msg.forward:
+                msg.clear_forward()
 
-            # Только медиа без текста
-            elif msg.media:
-                await client.send_file(target, msg.media)
-                print(f"[SUCCESS] Переслано только медиа из {chat_name} в {datetime.now(timezone(timedelta(hours=3))).strftime('%H:%M:%S МСК')}")
-
-            # Только текст
-            else:
-                await client.send_message(target, msg.message)
-                print(f"[SUCCESS] Переслан текст из {chat_name} в {datetime.now(timezone(timedelta(hours=3))).strftime('%H:%M:%S МСК')}")
+            # Пересылаем обычным форвардом (сохраняет текст + медиа + подпись)
+            await client.forward_messages(target, msg)
+            print(f"[SUCCESS] Переслано из {chat_name} в {datetime.now(timezone(timedelta(hours=3))).strftime('%H:%M:%S МСК')}")
 
         except Exception as e:
             print(f"[ERROR] Ошибка при пересылке: {e}")
@@ -110,7 +91,7 @@ async def main():
     print("Жду новых сообщений...")
     print("═" * 70 + "\n")
 
-    # Бесконечный цикл + пинг каналов каждые 5 минут
+    # Бесконечный цикл + пинг каждые 5 минут
     while True:
         try:
             for src in sources_entities:
