@@ -62,7 +62,7 @@ async def main():
         print(f"Ошибка с целью {target_str}: {e}")
         return
 
-    # Обработчик сообщений с максимальной отладкой
+    # Обработчик сообщений с отладкой
     @client.on(events.NewMessage(chats=sources_entities))
     async def handler(event):
         chat_name = event.chat.title or event.chat.username or "?"
@@ -80,7 +80,11 @@ async def main():
 
         try:
             msg = event.message
-            msg.clear_forward()
+            
+            # Безопасно убираем "Переслано из...", только если сообщение forwarded
+            if msg.forward:
+                msg.clear_forward()
+            
             await client.forward_messages(target, msg)
             print(f"[SUCCESS] Переслано из {chat_name} в {datetime.now(timezone(timedelta(hours=3))).strftime('%H:%M:%S МСК')}")
         except Exception as e:
