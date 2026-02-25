@@ -5,23 +5,19 @@
 import os
 import asyncio
 from telethon import TelegramClient, events
+from telethon.errors import FloodWaitError
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 
-# Загружаем переменные окружения из Railway
 load_dotenv()
 
-# ────────────────────────────────────────────────
-# Переменные из Railway → Variables
-# ────────────────────────────────────────────────
-api_id      = os.getenv("API_ID")      # 33887345
-api_hash    = os.getenv("API_HASH")    # 27278fe9e005b6a7c4f77c42bef3ea08
-sources_str = os.getenv("SOURCES")     # @vedexx_news,@customs_rf,@oVEDinfo
-target_str  = os.getenv("TARGET")      # @clr_group_expert
+api_id      = os.getenv("API_ID")
+api_hash    = os.getenv("API_HASH")
+sources_str = os.getenv("SOURCES")
+target_str  = os.getenv("TARGET")
 
-# Проверки
 if not api_id or not api_hash:
-    print("ОШИБКА: API_ID или API_HASH не заданы в Variables")
+    print("ОШИБКА: API_ID или API_HASH не заданы")
     exit(1)
 
 if not sources_str or not target_str:
@@ -33,7 +29,6 @@ sources_list = [s.strip() for s in sources_str.split(",") if s.strip()]
 
 client = TelegramClient("user_session", api_id, api_hash)
 
-# Проверка времени 09:00–21:00 МСК
 def is_working_time():
     now_msk = datetime.now(timezone(timedelta(hours=3)))
     hour = now_msk.hour
@@ -49,20 +44,17 @@ async def main():
         try:
             entity = await client.get_entity(src)
             sources_entities.append(entity)
-            title = entity.title or entity.username or src
-            print(f"Успешно подключён источник: {src} → {title}")
+            print(f"Успешно подключён источник: {src} → {entity.title or entity.username or src}")
         except Exception as e:
             print(f"Ошибка с источником {src}: {e}")
 
     try:
         target = await client.get_entity(target_str)
-        title = target.title or target.username or target_str
-        print(f"Целевой канал: {target_str} → {title}")
+        print(f"Целевой канал: {target_str} → {target.title or target.username or target_str}")
     except Exception as e:
         print(f"Ошибка с целью {target_str}: {e}")
         return
 
-    # Обработчик сообщений с отладкой
     @client.on(events.NewMessage(chats=sources_entities))
     async def handler(event):
         chat_name = event.chat.title or event.chat.username or "?"
@@ -80,11 +72,8 @@ async def main():
 
         try:
             msg = event.message
-            
-            # Безопасно убираем "Переслано из...", только если сообщение forwarded
             if msg.forward:
                 msg.clear_forward()
-            
             await client.forward_messages(target, msg)
             print(f"[SUCCESS] Переслано из {chat_name} в {datetime.now(timezone(timedelta(hours=3))).strftime('%H:%M:%S МСК')}")
         except Exception as e:
@@ -96,16 +85,25 @@ async def main():
     print("Жду новых сообщений...")
     print("═" * 70 + "\n")
 
-    # Бесконечный цикл + пинг каналов каждые 5 минут
+    # Бесконечный цикл с пингом и переподключением
     while True:
         try:
+            # Пинг каналов каждые 5 минут
             for src in sources_entities:
                 await client.get_messages(src, limit=1)
                 print(f"[PING] Проверен канал {src.username or src.title or src.id}")
+
             await asyncio.sleep(300)  # 5 минут
+
+        except ConnectionError:
+            print("[DISCONNECTED] Сессия Telegram отключена — переподключаемся...")
+            await client.start()  # переподключаемся автоматически
+        except FloodWaitError as e:
+            print(f"[FLOOD WAIT] Ждём {e.seconds} секунд...")
+            await asyncio.sleep(e.seconds)
         except Exception as e:
             print(f"[PING ERROR] {e}")
-            await asyncio.sleep(60)  # ждём минуту при ошибке
+            await asyncio.sleep(60)
 
 if __name__ == "__main__":
     print("Стартуем Telegram-бота...")
